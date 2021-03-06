@@ -70,7 +70,7 @@ struct GlobalKey {
     {
     }
 
-    // Construct an ObjectId from either a string or an integer
+    // Construct an GlobalKey from either a string, an integer or a GlobalId
     GlobalKey(Mixed pk);
 
     // Construct an object id from the local squeezed ObjKey
@@ -123,7 +123,6 @@ struct GlobalKey {
     ObjKey get_local_key(uint64_t sync_file_id)
     {
         REALM_ASSERT(m_hi <= 0x3fffffff);
-        REALM_ASSERT(lo() <= std::numeric_limits<uint32_t>::max());
 
         auto high = m_hi;
         if (high == sync_file_id)

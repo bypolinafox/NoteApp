@@ -48,10 +48,12 @@ class EditViewController: UIViewController, UITextFieldDelegate {
             delegate?.save(note: newNote)
             if let navstack = self.navigationController?.viewControllers{
                 let wc = WatchNoteViewController(note: newNote)
-                let viewController = navstack.first as! ViewController
-                wc.delegate = viewController
-                let newstack: [UIViewController] = [viewController, wc]
-                self.navigationController?.setViewControllers(newstack, animated: true)
+                if #available(iOS 11.0, *) {
+                    let viewController = navstack.first as! ViewController
+                    wc.delegate = viewController
+                    let newstack: [UIViewController] = [viewController, wc]
+                    self.navigationController?.setViewControllers(newstack, animated: true)
+                }
             }
         }
     }
@@ -70,7 +72,9 @@ class EditViewController: UIViewController, UITextFieldDelegate {
         if notification.name == UIResponder.keyboardWillHideNotification {
             currDescrOfNote.contentInset = .zero
         } else {
-            currDescrOfNote.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: keyboardViewEndFrame.height - view.safeAreaInsets.bottom, right: 0)
+            if #available(iOS 11.0, *) {
+                currDescrOfNote.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: keyboardViewEndFrame.height - view.safeAreaInsets.bottom, right: 0)
+            }
         }
 
         currDescrOfNote.scrollIndicatorInsets = currDescrOfNote.contentInset

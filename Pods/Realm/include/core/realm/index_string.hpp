@@ -24,7 +24,7 @@
 #include <array>
 
 #include <realm/array.hpp>
-#include <realm/cluster_tree.hpp>
+#include <realm/table_cluster_tree.hpp>
 
 /*
 The StringIndex class is used for both type_String and all integral types, such as type_Bool, type_Timestamp and
@@ -80,8 +80,6 @@ public:
     }
 
     ObjKey index_string_find_first(StringData value, const ClusterColumn& column) const;
-    void index_string_find_all(IntegerColumn& result, StringData value, const ClusterColumn& column,
-                               bool case_insensitive = false) const;
     void index_string_find_all(std::vector<ObjKey>& result, StringData value, const ClusterColumn& column,
                                bool case_insensitive = false) const;
     FindRes index_string_find_all_no_copy(StringData value, const ClusterColumn& column,
@@ -107,16 +105,18 @@ private:
     void index_string_all_ins(StringData value, std::vector<ObjKey>& result, const ClusterColumn& column) const;
 };
 
-// 12 is the biggest element size of any non-string/binary Realm type
-constexpr size_t string_conversion_buffer_size = 12;
+// 16 is the biggest element size of any non-string/binary Realm type
+constexpr size_t string_conversion_buffer_size = 16;
 using StringConversionBuffer = std::array<char, string_conversion_buffer_size>;
+static_assert(sizeof(UUID::UUIDBytes) <= string_conversion_buffer_size,
+              "if you change the size of a UUID then also change the string index buffer space");
 
 // The purpose of this class is to get easy access to fields in a specific column in the
 // cluster. When you have an object like this, you can get a string version of the relevant
 // field based on the key for the object.
 class ClusterColumn {
 public:
-    ClusterColumn(const ClusterTree* cluster_tree, ColKey column_key)
+    ClusterColumn(const TableClusterTree* cluster_tree, ColKey column_key)
         : m_cluster_tree(cluster_tree)
         , m_column_key(column_key)
     {
@@ -125,14 +125,14 @@ public:
     {
         return m_cluster_tree->size();
     }
-    ClusterTree::ConstIterator begin() const
+    TableClusterTree::Iterator begin() const
     {
-        return ClusterTree::ConstIterator(*m_cluster_tree, 0);
+        return TableClusterTree::Iterator(*m_cluster_tree, 0);
     }
 
-    ClusterTree::ConstIterator end() const
+    TableClusterTree::Iterator end() const
     {
-        return ClusterTree::ConstIterator(*m_cluster_tree, size());
+        return TableClusterTree::Iterator(*m_cluster_tree, size());
     }
 
 
@@ -145,7 +145,7 @@ public:
     StringData get_index_data(ObjKey key, StringConversionBuffer& buffer) const;
 
 private:
-    const ClusterTree* m_cluster_tree;
+    const TableClusterTree* m_cluster_tree;
     ColKey m_column_key;
 };
 
@@ -162,14 +162,10 @@ public:
         return m_target_column.get_column_key();
     }
 
-    template <class T>
-    static bool type_supported()
-    {
-        return realm::is_any<T, int64_t, int, StringData, bool, Timestamp>::value;
-    }
     static bool type_supported(realm::DataType type)
     {
-        return (type == type_Int || type == type_String || type == type_Bool || type == type_Timestamp);
+        return (type == type_Int || type == type_String || type == type_Bool || type == type_Timestamp ||
+                type == type_ObjectId || type == type_Mixed || type == type_UUID);
     }
 
     static ref_type create_empty(Allocator& alloc);
@@ -184,7 +180,7 @@ public:
     void set_parent(ArrayParent* parent, size_t ndx_in_parent) noexcept;
     size_t get_ndx_in_parent() const noexcept;
     void set_ndx_in_parent(size_t ndx_in_parent) noexcept;
-    void update_from_parent(size_t old_baseline) noexcept;
+    void update_from_parent() noexcept;
     void refresh_accessor_tree(const ClusterColumn& target_column);
     ref_type get_ref() const noexcept;
 
@@ -217,7 +213,6 @@ public:
 
     void clear();
 
-    void distinct(BPlusTree<ObjKey>& result) const;
     bool has_duplicate_values() const noexcept;
 
     void verify() const;
@@ -225,9 +220,6 @@ public:
     template <class T>
     void verify_entries(const ClusterColumn& column) const;
     void do_dump_node_structure(std::ostream&, int) const;
-    void to_dot() const;
-    void to_dot(std::ostream&, StringData title = StringData()) const;
-    void to_dot_2(std::ostream&, StringData title = StringData()) const;
 #endif
 
     typedef int32_t key_type;
@@ -313,14 +305,12 @@ private:
 
 #ifdef REALM_DEBUG
     static void dump_node_structure(const Array& node, std::ostream&, int level);
-    static void array_to_dot(std::ostream&, const Array&);
-    static void keys_to_dot(std::ostream&, const Array&, StringData title = StringData());
 #endif
 };
 
 class SortedListComparator {
 public:
-    SortedListComparator(const ClusterTree* cluster_tree, ColKey column_key)
+    SortedListComparator(const TableClusterTree* cluster_tree, ColKey column_key)
         : m_column(cluster_tree, column_key)
     {
     }
@@ -340,7 +330,13 @@ private:
 // Implementation:
 
 template <class T>
-struct GetIndexData;
+struct GetIndexData {
+    static StringData get_index_data(Mixed, StringConversionBuffer&)
+    {
+        REALM_ASSERT_RELEASE(false); // LCOV_EXCL_LINE; Index not supported
+        return {};
+    }
+};
 
 template <>
 struct GetIndexData<Timestamp> {
@@ -377,6 +373,22 @@ struct GetIndexData<StringData> {
 };
 
 template <>
+struct GetIndexData<Mixed> {
+    static StringData get_index_data(Mixed value, StringConversionBuffer& buffer)
+    {
+        if (value.is_null()) {
+            return null{};
+        }
+
+        auto hash = value.hash();
+        const char* c = reinterpret_cast<const char*>(&hash);
+        realm::safe_copy_n(c, sizeof(size_t), buffer.data());
+
+        return StringData{buffer.data(), sizeof(size_t)};
+    }
+};
+
+template <>
 struct GetIndexData<null> {
     static StringData get_index_data(null, StringConversionBuffer&)
     {
@@ -395,29 +407,21 @@ struct GetIndexData<util::Optional<T>> {
 };
 
 template <>
-struct GetIndexData<float> {
-    static StringData get_index_data(float, StringConversionBuffer&)
+struct GetIndexData<ObjectId> {
+    static StringData get_index_data(ObjectId value, StringConversionBuffer& buffer)
     {
-        REALM_ASSERT_RELEASE(false); // LCOV_EXCL_LINE; Index on float not supported
-        return {};
+        memcpy(&buffer, &value, sizeof(ObjectId));
+        return StringData{buffer.data(), sizeof(ObjectId)};
     }
 };
 
 template <>
-struct GetIndexData<double> {
-    static StringData get_index_data(double, StringConversionBuffer&)
+struct GetIndexData<UUID> {
+    static StringData get_index_data(UUID value, StringConversionBuffer& buffer)
     {
-        REALM_ASSERT_RELEASE(false); // LCOV_EXCL_LINE; Index on float not supported
-        return {};
-    }
-};
-
-template <>
-struct GetIndexData<BinaryData> {
-    static StringData get_index_data(BinaryData, StringConversionBuffer&)
-    {
-        REALM_ASSERT_RELEASE(false); // LCOV_EXCL_LINE; Index on float not supported
-        return {};
+        const auto bytes = value.to_bytes();
+        std::copy_n(bytes.data(), bytes.size(), buffer.begin());
+        return StringData{buffer.data(), bytes.size()};
     }
 };
 
@@ -640,9 +644,9 @@ inline void StringIndex::set_ndx_in_parent(size_t ndx_in_parent) noexcept
     m_array->set_ndx_in_parent(ndx_in_parent);
 }
 
-inline void StringIndex::update_from_parent(size_t old_baseline) noexcept
+inline void StringIndex::update_from_parent() noexcept
 {
-    m_array->update_from_parent(old_baseline);
+    m_array->update_from_parent();
 }
 
 } // namespace realm

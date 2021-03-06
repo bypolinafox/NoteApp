@@ -20,9 +20,6 @@
 #import <Realm/RLMConstants.h>
 
 @class RLMRealmConfiguration, RLMRealm, RLMObject, RLMSchema, RLMMigration, RLMNotificationToken, RLMThreadSafeReference, RLMAsyncOpenTask;
-struct RLMRealmPrivileges;
-struct RLMClassPrivileges;
-struct RLMObjectPrivileges;
 
 /**
  A callback block for opening Realms asynchronously.
@@ -212,6 +209,14 @@ NS_ASSUME_NONNULL_BEGIN
  All objects and collections read from a frozen Realm will also be frozen.
  */
 - (RLMRealm *)freeze NS_RETURNS_RETAINED;
+
+/**
+ Returns a live reference of this Realm.
+
+ All objects and collections read from the returned Realm will no longer be frozen.
+ This method will return `self` if it is not already frozen.
+ */
+- (RLMRealm *)thaw;
 
 #pragma mark - File Management
 
@@ -732,88 +737,6 @@ NS_REFINED_FOR_SWIFT;
  @see                 RLMMigration
  */
 + (BOOL)performMigrationForConfiguration:(RLMRealmConfiguration *)configuration error:(NSError **)error;
-
-#pragma mark - Privileges
-
-/**
- Returns the computed privileges which the current user has for this Realm.
-
- This combines all privileges granted on the Realm by all Roles which the
- current User is a member of into the final privileges which will be enforced by
- the server.
-
- The privilege calculation is done locally using cached data, and inherently may
- be stale. It is possible that this method may indicate that an operation is
- permitted but the server will still reject it if permission is revoked before
- the changes have been integrated on the server.
-
- Non-synchronized Realms always have permission to perform all operations.
-
- @warning This currently returns incorrect results for non-partially-synchronized read-only Realms.
- @return The privileges which the current user has for the current Realm.
- */
-- (struct RLMRealmPrivileges)privilegesForRealm;
-
-/**
- Returns the computed privileges which the current user has for the given object.
-
- This combines all privileges granted on the object by all Roles which the
- current User is a member of into the final privileges which will be enforced by
- the server.
-
- The privilege calculation is done locally using cached data, and inherently may
- be stale. It is possible that this method may indicate that an operation is
- permitted but the server will still reject it if permission is revoked before
- the changes have been integrated on the server.
-
- Non-synchronized Realms always have permission to perform all operations.
-
- The object must be a valid object managed by this Realm. Passing in an
- invalidated object, an unmanaged object, or an object managed by a different
- Realm will throw an exception.
-
- @warning This currently returns incorrect results for non-partially-synchronized read-only Realms.
- @return The privileges which the current user has for the given object.
- */
-- (struct RLMObjectPrivileges)privilegesForObject:(RLMObject *)object;
-
-/**
- Returns the computed privileges which the current user has for the given class.
-
- This combines all privileges granted on the class by all Roles which the
- current User is a member of into the final privileges which will be enforced by
- the server.
-
- The privilege calculation is done locally using cached data, and inherently may
- be stale. It is possible that this method may indicate that an operation is
- permitted but the server will still reject it if permission is revoked before
- the changes have been integrated on the server.
-
- Non-synchronized Realms always have permission to perform all operations.
-
- @warning This currently returns incorrect results for non-partially-synchronized read-only Realms.
- @return The privileges which the current user has for the given object.
- */
-- (struct RLMClassPrivileges)privilegesForClass:(Class)cls;
-
-/**
- Returns the computed privileges which the current user has for the named class.
-
- This combines all privileges granted on the class by all Roles which the
- current User is a member of into the final privileges which will be enforced by
- the server.
-
- The privilege calculation is done locally using cached data, and inherently may
- be stale. It is possible that this method may indicate that an operation is
- permitted but the server will still reject it if permission is revoked before
- the changes have been integrated on the server.
-
- Non-synchronized Realms always have permission to perform all operations.
-
- @warning This currently returns incorrect results for non-partially-synchronized read-only Realms.
- @return The privileges which the current user has for the given object.
- */
-- (struct RLMClassPrivileges)privilegesForClassNamed:(NSString *)className;
 
 #pragma mark - Unavailable Methods
 

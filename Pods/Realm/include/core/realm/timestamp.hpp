@@ -109,7 +109,7 @@ public:
     }
 
     template <typename C = std::chrono::system_clock, typename D = typename C::duration>
-    std::chrono::time_point<C, D> get_time_point()
+    std::chrono::time_point<C, D> get_time_point() const
     {
         REALM_ASSERT(!m_is_null);
 
@@ -117,6 +117,12 @@ public:
         auto duration = std::chrono::duration_cast<D>(std::chrono::duration<int64_t, std::nano>{native_nano});
 
         return std::chrono::time_point<C, D>(duration);
+    }
+
+    template <typename C = std::chrono::system_clock, typename D = typename C::duration>
+    explicit operator std::chrono::time_point<C, D>() const
+    {
+        return get_time_point();
     }
 
     bool operator==(const Timestamp& rhs) const
@@ -175,6 +181,8 @@ public:
     }
     Timestamp& operator=(const Timestamp& rhs) = default;
 
+    size_t hash() const noexcept;
+
     template <class Ch, class Tr>
     friend std::basic_ostream<Ch, Tr>& operator<<(std::basic_ostream<Ch, Tr>& out, const Timestamp&);
     static constexpr int32_t nanoseconds_per_second = 1000000000;
@@ -208,6 +216,11 @@ inline std::basic_ostream<C, T>& operator<<(std::basic_ostream<C, T>& out, const
     return out;
 }
 // LCOV_EXCL_STOP
+
+inline size_t Timestamp::hash() const noexcept
+{
+    return size_t(m_seconds) ^ size_t(m_nanoseconds);
+}
 
 } // namespace realm
 

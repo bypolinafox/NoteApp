@@ -91,6 +91,10 @@ public:
     /// you need to get multiple values, then this method will be
     /// slower.
     static T get(const char* header, size_t ndx) noexcept;
+    Mixed get_any(size_t ndx) const override
+    {
+        return Mixed(get(ndx));
+    }
 
     size_t lower_bound(T value) const noexcept;
     size_t upper_bound(T value) const noexcept;
@@ -109,10 +113,6 @@ public:
     /// Note that the caller assumes ownership of the allocated
     /// underlying node. It is not owned by the accessor.
     void create(Array::Type = type_Normal, bool context_flag = false);
-
-#ifdef REALM_DEBUG
-    void to_dot(std::ostream&, StringData title = StringData()) const;
-#endif
 
 private:
     size_t find(T target, size_t begin, size_t end) const;
@@ -135,9 +135,9 @@ class BasicArrayNull : public BasicArray<T> {
 public:
     using BasicArray<T>::BasicArray;
 
-    static T default_value(bool nullable)
+    static util::Optional<T> default_value(bool nullable)
     {
-        return nullable ? null::get_null_float<T>() : T(0.0);
+        return nullable ? util::Optional<T>() : util::Optional<T>(0.0);
     }
     void set(size_t ndx, util::Optional<T> value)
     {
@@ -178,6 +178,10 @@ public:
         T val = BasicArray<T>::get(ndx);
         return null::is_null_float(val) ? util::none : util::make_optional(val);
     }
+    Mixed get_any(size_t ndx) const override
+    {
+        return Mixed(get(ndx));
+    }
     size_t find_first(util::Optional<T> value, size_t begin = 0, size_t end = npos) const
     {
         if (value) {
@@ -200,7 +204,6 @@ public:
     size_t find_first_null(size_t begin = 0, size_t end = npos) const;
     void find_all_null(IntegerColumn* result, size_t add_offset = 0, size_t begin = 0, size_t end = npos) const;
 };
-
 
 // Class typedefs for BasicArray's: ArrayFloat and ArrayDouble
 typedef BasicArray<float> ArrayFloat;

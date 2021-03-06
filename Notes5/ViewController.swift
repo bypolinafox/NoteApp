@@ -27,7 +27,7 @@ class Note: Object {
         self.dateTime = dateTime
     }
     
-    required init() {}
+    required override init() {}
 }
 
 @available(iOS 11.0, *)
@@ -94,6 +94,7 @@ class ViewController: UIViewController, UITableViewDataSource, UITableViewDelega
     @IBAction func makeNote(_ sender: Any) {
         let editViewController = EditViewController(note: nil)
         editViewController.delegate = self
+//        present(editViewController, animated: true, completion: nil)
         self.navigationController?.pushViewController(editViewController, animated: true)
     }
     

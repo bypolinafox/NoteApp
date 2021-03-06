@@ -43,8 +43,8 @@ public class ListBase: RLMListBase {
  `List` is the container type in Realm used to define to-many relationships.
 
  Like Swift's `Array`, `List` is a generic type that is parameterized on the type it stores. This can be either an `Object`
- subclass or one of the following types: `Bool`, `Int`, `Int8`, `Int16`, `Int32`, `Int64`, `Float`, `Double`, `String`, `Data`,
- and `Date` (and their optional versions)
+ subclass or one of the following types: `Bool`, `Int`, `Int8`, `Int16`, `Int32`, `Int64`, `Float`, `Double`,
+ `String`, `Data`, `Date`, `Decimal128`, and `ObjectId` (and their optional versions)
 
  Unlike Swift's native collections, `List`s are reference types, and are only immutable if the Realm that manages them
  is opened as read-only.
@@ -241,7 +241,7 @@ public final class List<Element: RealmCollectionValue>: ListBase {
 
      - parameter property: The name of a property whose average value should be calculated.
      */
-    public func average(ofProperty property: String) -> Double? {
+    public func average<T: AddableType>(ofProperty property: String) -> T? {
         return _rlmArray.average(ofProperty: property).map(dynamicBridgeCast)
     }
 
@@ -432,6 +432,10 @@ public final class List<Element: RealmCollectionValue>: ListBase {
         return List(objc: _rlmArray.freeze())
     }
 
+    public func thaw() -> List? {
+        return List(objc: _rlmArray.thaw())
+    }
+
     // swiftlint:disable:next identifier_name
     @objc class func _unmanagedArray() -> RLMArray<AnyObject> {
         return Element._rlmArray()
@@ -465,7 +469,7 @@ extension List where Element: AddableType {
     /**
      Returns the average of the values in the list, or `nil` if the list is empty.
      */
-    public func average() -> Double? {
+    public func average<T: AddableType>() -> T? {
         return average(ofProperty: "self")
     }
 }
@@ -611,23 +615,16 @@ extension List: MutableCollection {
             remove(at: offset)
         }
     }
-
     /// :nodoc:
     public func move(fromOffsets offsets: IndexSet, toOffset destination: Int) {
-        var tmp = [Element]()
         for offset in offsets {
-            tmp.append(self[offset])
-        }
-        insert(contentsOf: tmp, at: destination)
-        for offset in offsets.reversed() {
-            var o = offset
-            if o >= destination {
-                o += tmp.count
+            var d = destination
+            if destination >= count {
+                d = destination - 1
             }
-            remove(at: o)
+            move(from: offset, to: d)
         }
     }
-
 }
 
 // MARK: - Codable
