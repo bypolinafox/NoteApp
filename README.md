@@ -14,4 +14,5 @@
 - Swift 5.2
 - Realm 5.3.0
 
-Перед запуском выполнить pod install из папки проекта. Открывать в редакторе файл .xcworkspace
+Перед запуском выполнить по очереди sudo gem install cocoapods, pod update, pod install из папки проекта. 
+Открывать в редакторе файл .xcworkspace
